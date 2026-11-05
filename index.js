@@ -420,6 +420,37 @@ export function apply(ctx, config = {}) {
     });
   }
 
+  async function editNote(id, textInput, vaultName) {
+    if (typeof id !== 'string' || !id.includes('|')) throw new Error('条目 id 不合法');
+    const [date, time, hash] = id.split('|');
+    if (!DAY_FILE.test(`${date}.md`) || !/^\d{2}:\d{2}$/.test(time ?? '') || !/^[0-9a-f]{8}$/.test(hash ?? '')) {
+      throw new Error('条目 id 不合法');
+    }
+    const text = normalizeText(textInput);
+    if (text === '') throw new Error('内容不能为空，想删请用删除');
+    const vault = vaultPath(vaultName);
+    return withLock(date, async () => {
+      const file = dayPath(date, vault);
+      let raw;
+      try {
+        raw = await fsp.readFile(file, 'utf8');
+      } catch {
+        throw new Error('这一天还没有记录');
+      }
+      const lines = raw.replace(/\r\n?/g, '\n').split('\n');
+      const parsed = parseDay(raw, date);
+      const target = parsed.find((note) => note.id === id);
+      if (target === undefined) throw new Error('这条记录已经不在了，刷新看看');
+      const block = serializeNote(target.time, text).split('\n');
+      const next = [...lines.slice(0, target.start), ...block, ...lines.slice(target.end)];
+      let output = next.join('\n');
+      if (!output.endsWith('\n')) output += '\n';
+      await fsp.writeFile(file, output, 'utf8');
+      cache.delete(file);
+      return { id: noteId(date, target.time, text), date, time: target.time, text };
+    });
+  }
+
   async function listDays(limit, before, vaultName) {
     const vault = vaultPath(vaultName);
     const files = await listDayFiles(vault);
@@ -541,6 +572,14 @@ export function apply(ctx, config = {}) {
       const vaultName = pickVaultName(body?.vault);
       const result = await deleteNote(body?.id, vaultName);
       sendJson(res, 200, { ok: true, vault: state.vaults[vaultName], vaultName, ...result });
+      return;
+    }
+
+    if (method === 'PATCH' && sub === '/notes') {
+      const body = await readBody(req);
+      const vaultName = pickVaultName(body?.vault);
+      const note = await editNote(body?.id, body?.text, vaultName);
+      sendJson(res, 200, { ok: true, vault: state.vaults[vaultName], vaultName, note });
       return;
     }
 

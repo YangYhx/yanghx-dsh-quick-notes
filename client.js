@@ -43,8 +43,12 @@ window.__ModuleLoader__.load({
         retry: '重试',
         copy: '复制',
         copied: '已复制',
+        expand: '展开全文',
+        collapse: '收起',
+        edit: '编辑',
         delete: '删除',
         'delete.confirm': '确认删除？',
+        'edit.empty': '内容不能为空，想删请用删除',
         confirm: '确认',
         cancel: '取消',
         close: '关闭',
@@ -84,6 +88,7 @@ window.__ModuleLoader__.load({
         'error.host': '宿主端没有响应，试试重启 DeepSeek Harness。',
         'error.title': '出了点问题',
         'notify.deleted': '已删除',
+        'notify.saved': '已保存',
         'notify.failed': '没成功：{message}',
         'search.clear': '清空',
       },
@@ -109,8 +114,12 @@ window.__ModuleLoader__.load({
         retry: 'Retry',
         copy: 'Copy',
         copied: 'Copied',
+        expand: 'Show more',
+        collapse: 'Show less',
+        edit: 'Edit',
         delete: 'Delete',
         'delete.confirm': 'Delete this note?',
+        'edit.empty': 'Content cannot be empty. Use delete instead.',
         confirm: 'Confirm',
         cancel: 'Cancel',
         close: 'Close',
@@ -150,6 +159,7 @@ window.__ModuleLoader__.load({
         'error.host': 'The host side is not responding. Try restarting DeepSeek Harness.',
         'error.title': 'Something went wrong',
         'notify.deleted': 'Deleted',
+        'notify.saved': 'Saved',
         'notify.failed': 'Failed: {message}',
         'search.clear': 'Clear',
       },
@@ -347,13 +357,25 @@ window.__ModuleLoader__.load({
 .qn-note+.qn-note{border-top:1px solid var(--dsw-alias-border-l1)}
 .qn-note:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .qn-time{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary);padding-top:2px;font-variant-numeric:tabular-nums}
-.qn-text{white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.62}
+.qn-body{min-width:0}
+.qn-text{white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.62;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.qn-text.is-expanded{display:block;-webkit-line-clamp:unset;overflow:visible}
+.qn-text.qn-measure{display:block;-webkit-line-clamp:unset;overflow:visible}
+.qn-expand{align-self:flex-start;margin-top:2px;padding:0;border:none;background:none;color:var(--dsw-alias-brand-primary);font-size:11.5px;line-height:1.6;cursor:pointer;opacity:.85}
+.qn-expand:hover{text-decoration:underline;opacity:1}
+.qn-edit{display:flex;flex-direction:column;gap:6px;width:100%}
+.qn-edit-area{width:100%;box-sizing:border-box;min-height:64px;max-height:260px;resize:vertical;font-family:inherit;font-size:13px;line-height:1.62;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 8px;outline:none}
+.qn-edit-area:focus{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-brand-primary) 18%,transparent)}
+.qn-edit-actions{display:flex;gap:6px;align-items:center}
 .qn-text mark{background:color-mix(in srgb,var(--dsw-alias-brand-primary) 22%,transparent);color:inherit;border-radius:3px;padding:0 1px}
 .qn-actions{display:flex;gap:2px;opacity:0;transition:opacity .12s}
 .qn-note:hover .qn-actions,.qn-note:focus-within .qn-actions{opacity:1}
 .qn-mini{height:24px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;cursor:pointer}
 .qn-mini:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .qn-mini.danger:hover{color:var(--dsw-alias-state-error-primary,#d9534f)}
+.qn-mini.primary{background:var(--dsw-alias-brand-primary);color:#fff;font-weight:500}
+.qn-mini.primary:hover{background:var(--dsw-alias-brand-primary);color:#fff;opacity:.9}
+.qn-mini.primary:disabled{opacity:.45;cursor:default}
 .qn-confirm{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .qn-empty{margin-top:56px;text-align:center;color:var(--dsw-alias-label-tertiary)}
 .qn-empty svg{opacity:.5;margin-bottom:10px}
@@ -567,6 +589,24 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = useState(false);
       const [error, setError] = useState('');
       const [copied, setCopied] = useState(false);
+      const [expanded, setExpanded] = useState(false);
+      const [clamped, setClamped] = useState(false);
+      const [editing, setEditing] = useState(false);
+      const [draft, setDraft] = useState('');
+      const textRef = useRef(null);
+      const editRef = useRef(null);
+
+      useEffect(() => {
+        if (expanded || editing) return;
+        const el = textRef.current;
+        if (!el) return;
+        // 量一次「3 行高度」与「完整高度」，决定是否显示展开按钮（不依赖 scrollHeight 在 line-clamp 下的语义）
+        const clampedHeight = el.clientHeight;
+        el.classList.add('qn-measure');
+        const fullHeight = el.scrollHeight;
+        el.classList.remove('qn-measure');
+        setClamped(fullHeight > clampedHeight + 2);
+      }, [note.text, expanded, editing]);
 
       const copy = async () => {
         try {
@@ -594,8 +634,44 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const startEdit = () => {
+        setDraft(note.text);
+        setEditing(true);
+        setError('');
+        setConfirming(false);
+        setTimeout(() => {
+          const el = editRef.current;
+          if (el !== null) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+          }
+        }, 0);
+      };
+
+      const saveEdit = async () => {
+        if (busy) return;
+        if (draft.trim() === '') {
+          setError(t('edit.empty'));
+          return;
+        }
+        setBusy(true);
+        setError('');
+        try {
+          await api('/notes', { method: 'PATCH', body: JSON.stringify({ id: note.id, text: draft, vault: vaultName }) });
+          setEditing(false);
+          versionStore.set((s) => ({ v: s.v + 1 }));
+          toast(t('notify.saved'));
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err));
+        } finally {
+          setBusy(false);
+        }
+      };
+
       let actions;
-      if (confirming) {
+      if (editing) {
+        actions = null;
+      } else if (confirming) {
         actions = h(
           'div',
           { className: 'qn-confirm' },
@@ -608,7 +684,53 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'qn-actions' },
           h('button', { type: 'button', className: 'qn-mini', title: t('copy'), onClick: copy }, copied ? t('copied') : t('copy')),
+          h('button', { type: 'button', className: 'qn-mini', title: t('edit'), onClick: startEdit }, t('edit')),
           h('button', { type: 'button', className: 'qn-mini danger', title: t('delete'), onClick: () => setConfirming(true) }, t('delete')),
+        );
+      }
+
+      let body;
+      if (editing) {
+        body = h(
+          'div',
+          { className: 'qn-body' },
+          h(
+            'div',
+            { className: 'qn-edit' },
+            h('textarea', {
+              ref: editRef,
+              className: 'qn-edit-area',
+              value: draft,
+              rows: 3,
+              onChange: (event) => setDraft(event.target.value),
+              onKeyDown: (event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setEditing(false);
+                  setError('');
+                } else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  void saveEdit();
+                }
+              },
+            }),
+            error !== '' ? h('span', { className: 'qn-err' }, error) : null,
+            h(
+              'div',
+              { className: 'qn-edit-actions' },
+              h('button', { type: 'button', className: 'qn-mini primary', disabled: busy, onClick: () => void saveEdit() }, busy ? t('saving') : t('save')),
+              h('button', { type: 'button', className: 'qn-mini', onClick: () => { setEditing(false); setError(''); } }, t('cancel')),
+            ),
+          ),
+        );
+      } else {
+        body = h(
+          'div',
+          { className: 'qn-body' },
+          h('div', { className: `qn-text${expanded ? ' is-expanded' : ''}`, ref: textRef }, error !== '' ? h('span', { className: 'qn-err' }, error) : note.text),
+          clamped || expanded
+            ? h('button', { type: 'button', className: 'qn-expand', onClick: () => setExpanded((v) => !v) }, expanded ? t('collapse') : t('expand'))
+            : null,
         );
       }
 
@@ -616,7 +738,7 @@ window.__ModuleLoader__.load({
         'div',
         { className: 'qn-note' },
         h('span', { className: 'qn-time' }, note.time),
-        h('div', { className: 'qn-text' }, error !== '' ? h('span', { className: 'qn-err' }, error) : note.text),
+        body,
         actions,
       );
     }

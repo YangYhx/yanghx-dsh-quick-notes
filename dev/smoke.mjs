@@ -137,15 +137,31 @@ check('坏目录被拒', bad.status >= 400, bad.data);
 const cfgAfter = JSON.parse(fs.readFileSync(path.join(tmpHome, 'quick-notes', 'config.json'), 'utf8'));
 check('配置未变', Object.keys(cfgAfter.vaults).length === 1 && !('坏' in cfgAfter.vaults), cfgAfter);
 
-console.log('11) 删除按笔记本定位');
-const beforeDel = await call('GET', '/days?vault=默认');
-const delId = beforeDel.data.days[0].notes[0].id;
+console.log('11) 编辑条目');
+const editSource = await call('GET', '/days?vault=默认');
+const editTarget = editSource.data.days[0].notes[0];
+const edited = await call('PATCH', '/notes', { id: editTarget.id, text: '默认里的一条（改过）\n第二行', vault: '默认' });
+check('编辑成功', edited.status === 200 && edited.data.note.text.includes('改过'), edited.data);
+check('时间保留', edited.data.note.time === editTarget.time, edited.data.note);
+check('新 id 与旧不同', edited.data.note.id !== editTarget.id, edited.data.note.id);
+const defaultMd = fs.readdirSync(vaultDefault).find((n) => n.endsWith('.md'));
+const mdBody = fs.readFileSync(path.join(vaultDefault, defaultMd), 'utf8');
+check('文件已更新（含续行缩进）', mdBody.includes('默认里的一条（改过）') && mdBody.includes('  第二行'), mdBody);
+const editedAgain = await call('GET', '/days?vault=默认');
+check('列表里是改后内容', editedAgain.data.days[0].notes[0].text === '默认里的一条（改过）\n第二行', editedAgain.data.days[0].notes[0]);
+const emptyEdit = await call('PATCH', '/notes', { id: edited.data.note.id, text: '   ', vault: '默认' });
+check('空内容被拒', emptyEdit.status >= 400, emptyEdit.data);
+const ghostEdit = await call('PATCH', '/notes', { id: '2026-01-01|10:00|deadbeef', text: 'x', vault: '默认' });
+check('不存在的条目被拒', ghostEdit.status >= 400, ghostEdit.data);
+
+console.log('12) 删除按笔记本定位');
+const delId = edited.data.note.id;
 const del = await call('DELETE', '/notes', { id: delId, vault: '默认' });
 check('删除默认那条成功', del.status === 200, del.data);
 const afterDel = await call('GET', '/days?vault=默认');
 check('默认现在为空', afterDel.data.total === 0, afterDel.data);
 
-console.log('12) 鉴权');
+console.log('13) 鉴权');
 const denied = await new Promise((resolve) => {
   const req = new EventEmitter();
   req.method = 'GET';

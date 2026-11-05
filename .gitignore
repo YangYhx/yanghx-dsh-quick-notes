@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+*.tgz
+*.log
+npm-debug.log*
+yarn-error.log
+pnpm-debug.log*
+
+# 凭据 / 环境变量
+.npmrc
+.env
+.env.*
+!.env.example
+
+# 本地备份与临时产物
+.backup-*/
+tmp/

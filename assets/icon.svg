@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Quick Notes">
+  <defs>
+    <linearGradient id="qn-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f6f8b"/>
+      <stop offset="1" stop-color="#2f9e8f"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#qn-bg)"/>
+  <rect x="17" y="13" width="26" height="38" rx="5" fill="#f7fbfc" opacity="0.96"/>
+  <path d="M23 22.5h14M23 29h14M23 35.5h8" stroke="#1f6f8b" stroke-width="2.4" stroke-linecap="round" opacity="0.75"/>
+  <circle cx="42.5" cy="44.5" r="6.5" fill="#ffd166"/>
+  <path d="M40 44.6l1.8 1.9 3.3-3.6" stroke="#1a3b46" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

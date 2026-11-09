@@ -1,6 +1,6 @@
 {
   "name": "@yanghx/dsh-quick-notes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "随手记：⌘⇧N 速记浮层 + 按天时间线 + 本地 Markdown（多笔记本）",
   "license": "MIT",
